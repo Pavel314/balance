@@ -362,8 +362,7 @@ type
   private
     l_flipj, r_flipj: RevoluteJoint;
     ball: RigidBody;
-    q:=0.0;
-    
+  
   public
     procedure reset(w, h: real); override;
     begin
@@ -381,12 +380,12 @@ type
       // Flippers
       begin
         var (p1, p2) := (bl_vect(-2, 0), bl_vect(2, 0));
-
+        
         var box_sh := bl_group(Polygon.box(1.75 * 2, 0.2 * 2));
         
         var l_flip := m_world.add_body(box_sh, p1);
         var r_flip := m_world.add_body(box_sh, p2);
-
+        
         l_flipj := Joints.Revolute(ground, l_flip, p1);
         l_flipj.with_ang_motor(0, 1000).with_ang_limit(DegToRad(-30), DegToRad(5));
         
@@ -396,7 +395,7 @@ type
         m_world.add_joint(l_flipj);
         m_world.add_joint(r_flipj);
       end;
-
+      
       // Spinners
       begin
         var spin_sh := Polygon.box(3.0, 0.3);
@@ -416,9 +415,10 @@ type
       begin
         var mat := Material.from_frd(0.1, 0.05, 2.5);
         var ball_sh := bl_group(new Circle(0.3));
-        ball := m_world.add_body(ball_sh, bl_vect(1, 15), mat:=mat);
+        ball := m_world.add_body(ball_sh, bl_vect(1, 15), mat := mat);
       end;
     end;
+    
     procedure pre_frame(input: IInputSource); override;
     begin
       if input.is_key_down('Space') then
@@ -434,6 +434,87 @@ type
       limit_velocity(ball, 40);
     end;
   end;
+  
+  [SceneName('Mini Shapes')]
+  MiniShapesScene = class(BaseScene)
+  private
+    demo_tag := new object();
+    mouse_follow_damp := new Damping(0.9, 0.9, en := false);
+  public
+    const sz = 0.5;
+    
+    [UISliderInt(UIAttributeReset, 'Max Objects', 10, 800, 10)]
+    ui_objs_count: integer := 100;
+    
+    [UISliderReal(UIAttributeReset, 'Start Impulse', 0, 1, 0.1)]
+    ui_start_impulse: real := 0.5;
+    
+    [UISliderReal(UIAttributeReset, 'Circle probability', 0, 1, 0.1)]
+    ui_circle_prob: real := 0.3;
+    
+    [UISliderReal(UIAttributeHot, 'Friction', 0, 1, 0.05)]
+    ui_fric: real := 0.0;
+    
+    [UISliderReal(UIAttributeHot, 'Restitution', 0, 1, 0.1)]
+    ui_rest: real := 1.0;
+    
+    [UICheckbox(UIAttributeHot, 'Mouse Follow')]
+    ui_mouse_follow: boolean := false;
+    
+    function reset_on_resize(): boolean; override := true;
+    
+    procedure add_random_shape(pos: Vector);
+    begin
+      var r := sz * 0.5;
+      var shape: Shape;
+      if (Random() < ui_circle_prob) then
+        shape := new Circle(r)
+      else
+        shape := Polygon.regular(Random(3, 12), r);
+      var body := m_world.add_body(bl_group(shape), pos, damp := mouse_follow_damp, tag := demo_tag);
+      var rv: real-> Vector := x -> bl_vect(Random(-x, x), Random(-x, x));
+      body.add_impulse_r(rv(ui_start_impulse), rv(r));
+    end;
+    
+    procedure reset(w, h: real); override;
+    begin
+      m_world := new PhysWorld(bl_vect0);
+      var side := sqrt(ui_objs_count) * sz * 2.5;
+      m_view := Viewport.fixed_zoom(new Camera(bl_vect0, Min(w / side, h / side)), w, h);
+      world.set_bounds(m_view.get_world_bbox(), -5);
+    end;
+    
+    procedure pre_frame(input: IInputSource); override;
+    begin
+      var mat := Material.from_frd(ui_fric, ui_rest, 1.0);
+      m_world.bounds_body.mat := mat;
+      var mouse_btn: integer;
+      var mouse_pos: Vector;
+      if ui_mouse_follow then 
+      begin
+        input.get_mouse(mouse_btn, mouse_pos);
+        mouse_pos := m_view.to_world(mouse_pos);
+      end;
+      
+      for var i := 0 to m_world.bodies.Count - 1 do
+      begin
+        var b := m_world.bodies[i];
+        if not object.ReferenceEquals(b.tag, demo_tag) then continue;
+        b.mat := mat;
+        if ui_mouse_follow then 
+        begin
+          var dir :=  mouse_pos - b.pos; 
+          b.add_force(dir.norm()); 
+          b.damp.enabled := true;   
+        end 
+        else
+          b.damp.enabled := false;
+      end;
+      
+      if m_world.bodies.Count < ui_objs_count then
+        add_random_shape(bl_vect0);
+    end;
+  end;
 
 const
   all_scenes = |typeof(FrictionScene),
@@ -442,7 +523,8 @@ const
   typeof(SpringsScene),
   typeof(NewtonCradleScene),
   typeof(CarDrivingScene),
-  typeof(PinballScene)
+  typeof(PinballScene),
+  typeof(MiniShapesScene)
   |;
 
 begin

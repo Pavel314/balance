@@ -166,6 +166,7 @@ type
   
   public
     procedure resized():=Invoke(resizedd);
+    property WPFCanvas:System.Windows.Controls.Canvas read m_canvas;
     property Width:real read m_w<>m_w?GraphWindow.Width:m_w;
     property Height:real read m_h<>m_h?GraphWindow.Height:m_h;
   end;

@@ -63,7 +63,7 @@ type
     function is_mouse_drag() := mousedr.is_captured;
     procedure get_mouse(var btn: integer; var pos: blVector);
     begin
-      var pt_pos := System.Windows.Input.Mouse.GetPosition(MainDockPanel());
+      var pt_pos := System.Windows.Input.Mouse.GetPosition(Canvas.WPFCanvas);
       pos := bl_vect(pt_pos.X, pt_pos.Y);
       btn := 0;
       if System.Windows.Input.Mouse.LeftButton = MouseButtonState.Pressed then 
@@ -321,7 +321,10 @@ var
 procedure on_resize();
 begin
   Canvas.resized();
-  sc.view.resize(Canvas.Width, Canvas.Height);
+  if sc.reset_on_resize() then
+    sc.reset(Canvas.Width, Canvas.Height)
+  else
+    sc.view.resize(Canvas.Width, Canvas.Height);
 end;
 
 procedure on_show_prms_changed(checked: boolean);

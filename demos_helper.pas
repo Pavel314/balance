@@ -406,17 +406,17 @@ type
   end;
   
   BaseScene = abstract class
+  private
+    m_reset_on_resize:boolean;
   protected
     m_world: PhysWorld;
     m_view: Viewport;
   public
     property world: PhysWorld read m_world;
     property view: Viewport read m_view;
-    
+    function reset_on_resize():boolean; virtual := false;
     procedure reset(w, h: real); abstract;
-    
     procedure pre_frame(input: IInputSource); virtual;begin end;
-    
     procedure post_frame(input: IInputSource; steps: integer); virtual;begin end;
   end;
 
