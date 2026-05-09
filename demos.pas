@@ -10,9 +10,6 @@ type
     begin
       m_world := new PhysWorld(bl_vect(0, -9.8));
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 14), 35 * 0.6), w, h);
-      
-        //m_cam := new Camera(bl_trans(0, 14), w, h, 35 * 0.6);
-        //resize(w, h);
       begin
         var mat := Material.from_frd(0.2, 0, 1);
         var make_box: (real, real, real, real, real)-> RigidBody;
@@ -42,20 +39,20 @@ type
       m_world := new PhysWorld(bl_vect(0, -9.8));
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 4), 200 * 0.25), w, h);
       
+      var mat := Material.from_frd(0.5, 0, 1.0);
       begin
         var box := bl_group(Polygon.box(100 * 2, 1 * 2));
-        world.add_body(box, bl_vect(0, -1), 0, is_static := true);
+        world.add_body(box, bl_vect(0, -1), 0, is_static := true, mat:=mat);
       end;
       
       begin
         var box := bl_group(Polygon.box(0.125 * 2, 0.5 * 2));
-        var mat := Material.from_frd(0.6, 0, 1);
         var count := 15;
         for var i := 0 to count - 1 do
         begin
           var x := -0.5 * count + i;
           var domino := m_world.add_body(box, bl_vect(x, 0.5), mat := mat);
-          if i = 0 then domino.add_impulse(bl_vect(0.2, 0.0), bl_vect(x, 1.0));
+          if i = 0 then domino.add_impulse(bl_vect(0.1, 0.0), bl_vect(x, 1.0));
         end;
       end;
     end;
@@ -235,7 +232,7 @@ type
       m_view := Viewport.fixed_world(new Camera(bbox.center), bbox.width, bbox.height, w, h);
       
       var border_sh := bl_group(Polygon.box(bbox.width, border_h));
-      var border := m_world.add_body(border_sh, bl_vect(0, scene_h), is_static := true);
+      m_world.add_body(border_sh, bl_vect(0, scene_h), is_static := true);
       
       var ball_sh := bl_group(new Circle(sz / 2));
       var anchor_sh := bl_group(Polygon.box(sz / 2, sz / 2));
@@ -399,8 +396,8 @@ type
       // Spinners
       begin
         var spin_sh := Polygon.box(3.0, 0.3);
-        var lj := add_spinner(world, spin_sh, bl_vect(-4, 17), 2).with_ang_motor(0.0, 1);
-        var rj := add_spinner(world, spin_sh, bl_vect(4, 8), 2).with_ang_motor(0.0, 1);
+        add_spinner(world, spin_sh, bl_vect(-4, 17), 2).with_ang_motor(0.0, 1);
+        add_spinner(world, spin_sh, bl_vect(4, 8), 2).with_ang_motor(0.0, 1);
       end;
       
       // Bumpers

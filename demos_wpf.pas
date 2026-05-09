@@ -263,7 +263,7 @@ type
       elem.Click := () -> on_click(ctx, attr.kind, m);
     end;
     
-    static function build_ui_step(ctx: UISceneWPFBuilderCtx): boolean;
+    static procedure build_ui_step(ctx: UISceneWPFBuilderCtx);
     begin
       var members := ctx.owner.GetType().GetMembers(BindingFlags.Instance or BindingFlags.Public).OrderBy(m -> m.MetadataToken);
       foreach var m in members do
@@ -305,8 +305,6 @@ type
       var sc_panel: ScenePanelWPF;// := create_scene_panel();;
       var ctx := new UISceneWPFBuilderCtx(on_reset, ()->begin if sc_panel = nil then sc_panel := create_scene_panel(); end, sc, -1);
       build_ui_step(ctx);
-      //if  then
-      
       result := sc_panel;
     end; 
   end;
