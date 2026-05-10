@@ -40,19 +40,26 @@ type
   Shape = abstract class
   private
     m_kind: ShapeKind;
-  protected
     m_area: real;
     m_inertia: real;
-    m_user_centroid: Vector;
     m_aabb: BoundBox;
+    m_user_centroid: Vector;
+  protected
+    procedure init_base(area, inertia: real; aabb: BoundBox; user_centroid: Vector);
+    begin
+      m_area := area;
+      m_inertia := inertia;
+      m_aabb := aabb;      
+      m_user_centroid := user_centroid;
+    end;
+  
   public
     property kind: ShapeKind read m_kind;
     property area: real read m_area;
     property inertia: real read m_inertia; //base inertia
-    property user_centroid: Vector read m_user_centroid;
     property aabb: BoundBox read m_aabb;
+    property user_centroid: Vector read m_user_centroid;
     
-    procedure recalc(); abstract;
     function get_proj(axis: Vector; tr: Transform): MinMax; abstract;
     
     function at(x, y: real; ang: real := 0.0) := new TrShape(self, bl_trans(x, y, ang));
@@ -65,7 +72,7 @@ type
     
     constructor create(kind: ShapeKind);
     begin
-      self.m_kind := kind;
+      m_kind := kind;
     end;
   end;
   
@@ -91,10 +98,6 @@ type
   
   Polygon = class(Shape)
   public
-    //TODO AABB[Done]
-    vertices: List<Vector>;
-    normals: List<Vector>;
-    
     static function get_convex_orientation(verts: IReadOnlyList<Vector>): integer;
     begin
       var n := verts.Count;
@@ -136,33 +139,53 @@ type
       //Перенос инерции из начала координат в Центр Масс (теорема Гюйгенса-Штейнера)
       inertia := (inertia / 12.0) - area * centroid.LengthSquared;       
     end;
+  
+  private
+    m_vertices: array of Vector; //List<Vector>;
+    m_normals:  array of Vector; //List<Vector>;
+  
+  public
+    property vertices: IReadOnlyList<Vector> read IReadOnlyList&<Vector>(m_vertices);
+    property normals: IReadOnlyList<Vector> read IReadOnlyList&<Vector>(m_normals);
     
-    procedure recalc(); override;
+    
+    constructor create(verts: IEnumerable<Vector>);
     begin
-      var orient := get_convex_orientation(vertices);
+      inherited create(ShapeKind.ShapePolygon);
+      
+      var verts_arr := verts.ToArray();
+      var count := verts_arr.Length;
+      var area := 0.0;
+      var inertia := 0.0;
+      var aabb := BoundBox.empty();
+      var user_centroid := bl_vect0;
+      
+      var orient := get_convex_orientation(verts_arr);
       if orient = 0 then raise new System.ArgumentException('Vertices must define a convex polygon in CCW or CW order');
-      if orient = -1 then vertices.Reverse(); 
-      get_metrics(vertices, m_area, m_user_centroid, m_inertia);
-      m_aabb := BoundBox.empty();
-      var count := vertices.Count;
+      if orient = -1 then &Array.Reverse(verts_arr);
+      get_metrics(verts_arr, area, user_centroid, inertia);
+      
+      self.m_vertices := new Vector[count];
       for var i := 0 to count - 1 do
       begin
-        var v := vertices[i] - m_user_centroid;
-        vertices[i] := v;
-        m_aabb.extend(v);
+        m_vertices[i] := verts_arr[i] - user_centroid;
+        aabb.extend(m_vertices[i]);
       end;
-      normals := new List<Vector>(count);      
+      
+      self.m_normals := new Vector[count];
       for var i := 0 to count - 1 do
-        normals.Add(Utils.normal(vertices[i], vertices[(i + 1) mod count]));
+        m_normals[i] := Utils.normal(m_vertices[i], m_vertices[Utils.mmod(i + 1, count)]);
+      
+      init_base(area, inertia, aabb, user_centroid);
     end;
     
     function get_edge(i: integer; tr: Transform): PolygonEdge;
     begin
-      var i1 := Utils.mmod(i, vertices.Count);
-      var i2 := Utils.mmod(i + 1, vertices.Count);
-      var v1 := tr.apply(vertices[i1]);
-      var v2 := tr.apply(vertices[i2]);
-      var n := tr.apply_dir(normals[i1]);       
+      var i1 := Utils.mmod(i, m_vertices.Length);
+      var i2 := Utils.mmod(i + 1, m_vertices.Length);
+      var v1 := tr.apply(m_vertices[i1]);
+      var v2 := tr.apply(m_vertices[i2]);
+      var n := tr.apply_dir(m_normals[i1]);       
       result := new PolygonEdge(i1, i2, v1, v2, n);
     end;
     
@@ -170,18 +193,11 @@ type
     begin
       result := MinMax.empty();
       var local_axis := tr.unapply_dir(world_axis);      
-      for var i := 0 to vertices.count - 1 do
-        result.extend(vertices[i] * local_axis);
+      for var i := 0 to m_vertices.Length - 1 do
+        result.extend(m_vertices[i] * local_axis);
       var offset := tr.pos * world_axis;
       result.min += offset;
       result.max += offset;
-    end;
-    
-    constructor create(verts: IEnumerable<Vector>); //params verts: array of
-    begin
-      inherited create(ShapeKind.ShapePolygon);
-      self.vertices := new List<Vector>(verts);
-      recalc()
     end;
     
     static function regular(n: integer; r: real; r1: real ? := nil; ang: real ? := nil): Polygon;
@@ -218,8 +234,11 @@ type
       result := new Polygon(arr(-n, dir - n, dir + n, n));
     end;
     
-    static function box(w, h: real) := new Polygon(arr(bl_vect(-w / 2, -h / 2), bl_vect(w / 2, -h / 2), bl_vect(w / 2, h / 2), bl_vect(-w / 2, h / 2)));
+    static function box_r(hw, hh: real) := new Polygon(|bl_vect(-hw, -hh), bl_vect(hw, -hh), bl_vect( hw,  hh), bl_vect(-hw,  hh)|);
+    static function box(w, h: real) := box_r(w * 0.5, h * 0.5);
   end;
+  
+  
   
   Circle = class(Shape)
   private
@@ -229,16 +248,11 @@ type
     constructor create(r: real; centroid: Vector := bl_vect0);
     begin
       inherited create(ShapeKind.ShapeCircle);
-      self.m_radius := r;
-      self.m_user_centroid := centroid;
-      recalc();
-    end;
-    
-    procedure recalc(); override;
-    begin
-      m_area := pi * m_radius * m_radius;
-      m_inertia := 0.5 * m_area * m_radius * m_radius;
-      m_aabb := BoundBox.from_minmax(-radius, radius);
+      m_radius := r;
+      var area := pi * r * r;
+      var inertia := 0.5 * area * r * r;
+      var aabb := BoundBox.from_minmax(-radius, radius);
+      init_base(area, inertia, aabb, centroid);
     end;
     
     function get_proj(world_axis: Vector; tr: Transform): MinMax; override;
@@ -492,14 +506,8 @@ type
   end;
   {$endregion}
   
-  ShapeGroup = class
+  ShapeGroup = class  
   public
-    parts: List<TrShape>;
-    area: real;
-    centroid: Vector;
-    inertia: real;
-    aabb: BoundBox;
-    
     static procedure get_metrics(parts: IReadOnlyList<TrShape>; var area: real; var centroid: Vector; var inertia: real);
     begin
       assert((parts <> nil) and (parts.Count > 0));
@@ -518,21 +526,30 @@ type
       foreach var p in parts do
         inertia += p.shap.inertia + p.shap.area * (p.tr.pos - centroid).LengthSquared;
     end;
-    
-    procedure recalc();
-    begin
-      get_metrics(parts, area, centroid, inertia);
-      for var i := 0 to parts.Count - 1 do
-        parts[i] := new TrShape(parts[i].shap, parts[i].tr.moved(-centroid));
-      aabb := BoundBox.empty();
-      foreach var p in parts do
-        aabb.extend(p.aabb);
-    end;
-    
+  
+  private
+    m_parts: array of TrShape;
+    m_area: real;
+    m_inertia: real;
+    m_centroid: Vector;
+    m_aabb: BoundBox;
+  
+  public
+    property parts:IReadOnlyList<TrShape> read IReadOnlyList&<TrShape>(m_parts);
+    property area:real read m_area;
+    property inertia:real read m_inertia;
+    property centroid:Vector read m_centroid;
+    property aabb: BoundBox read m_aabb;
+
     constructor create(parts: IEnumerable<TrShape>);
     begin
-      self.parts := new List<TrShape>(parts);
-      recalc();
+      m_parts := parts.ToArray();
+      get_metrics(m_parts, m_area, m_centroid, m_inertia);
+      for var i := 0 to m_parts.Length - 1 do
+        m_parts[i] := new TrShape(m_parts[i].shap, m_parts[i].tr.moved(-m_centroid));
+      m_aabb := BoundBox.empty();
+      foreach var p in m_parts do
+        m_aabb.extend(p.aabb);      
     end;
     
     static function make_hollow(p: Polygon; thickness: real; miter: boolean): ShapeGroup;
@@ -797,9 +814,9 @@ type
       _set_is_static(_is_static)
     end;
     
-    constructor create(group: ShapeGroup; tr: Transform; is_static: boolean; mat: material ?:= nil; custom_mass: real ?:= nil; damp: Damping ?:= nil; tag:object:=nil);
+    constructor create(group: ShapeGroup; tr: Transform; is_static: boolean; mat: material ?:= nil; custom_mass: real ?:= nil; damp: Damping ?:= nil; tag: object := nil);
     begin
-      self.group := group;//TODO should we copy group?
+      self.group := group;//TODO[Closed, since group is immutable] should we copy group?
       self.tr := tr.combine(bl_trans(group.centroid));
       self.vel := bl_vect0;
       self.force := bl_vect0;
@@ -1153,9 +1170,9 @@ type
   public
     property body_a: RigidBody read m_body_a;
     property body_b: RigidBody read m_body_b;
-    auto property tag:object;
+    auto property tag: object;
     
-    constructor create(body_a, body_b: RigidBody; constraints: IEnumerable<BaseConstraint> := nil; tag:object:=nil);
+    constructor create(body_a, body_b: RigidBody; constraints: IEnumerable<BaseConstraint> := nil; tag: object := nil);
     begin
       m_body_a := body_a;
       m_body_b := body_b;   
@@ -1410,10 +1427,9 @@ type
     mat: Material ?:= nil;
     mass: real ? := nil;
     damp: Damping ?:= nil; 
-    tag:object:=nil
-    ): RigidBody;
+    tag: object := nil): RigidBody;
     begin
-      result := new RigidBody(shape, bl_trans(pos, ang), is_static, mat:=mat, custom_mass:=mass, damp:=damp, tag:=tag);
+      result := new RigidBody(shape, bl_trans(pos, ang), is_static, mat := mat, custom_mass := mass, damp := damp, tag := tag);
       self.bodies.Add(result);
     end;
     
