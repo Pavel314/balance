@@ -1,4 +1,4 @@
-﻿//Auto-generated on 2026.05.06. 04:18:28
+//Auto-generated on 2026.05.11. 09:53:57
 unit balance;
 uses balance_basic, balance_core, balance_joints;
 
@@ -11,8 +11,8 @@ FixedBuf2<T> = balance_basic.FixedBuf2<T>;
 Transform = balance_basic.Transform;
 MinMax = balance_basic.MinMax;
 BoundBox = balance_basic.BoundBox;
-ViewportResizeMode = balance_basic.ViewportResizeMode;
 Camera = balance_basic.Camera;
+ViewportResizeMode = balance_basic.ViewportResizeMode;
 Viewport = balance_basic.Viewport;
 Utils = balance_basic.Utils;
 IntervalSide = balance_basic.IntervalSide;

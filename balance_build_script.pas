@@ -239,6 +239,7 @@ const
   balance_core = new PascalModule('balance_core.pas', balance_basic);
   balance_joints = new PascalModule('balance_joints.pas', balance_core, balance_basic);
   balance = new PascalModule('balance.pas', balance_joints,  balance_core, balance_basic);
+  balance_api_file = 'balance_api.txt';
   
   compiler_path = 'C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe';
   inv_chars = |'$', '<', '>', '%'|;
@@ -283,9 +284,9 @@ begin
   end;
 end;
 
-function build_api():string;
+function build_api(): string;
 begin
-  var wr:=new StringBuilder();
+  var wr := new StringBuilder();
   var asm := compile(balance);
   
   foreach var t in get_exported_types(asm) do
@@ -319,7 +320,7 @@ begin
       wr.AppendLine($' {PascalInspector.format_property(p)}');
     end;
   end;
-  result:=wr.ToString();
+  result := wr.ToString();
 end;
 
 type
@@ -388,7 +389,7 @@ begin
   end;
 end;
 
-function build_synonims():string;
+function build_synonims(): string;
 begin
   //Порядок должен быть иерархический от базовых к зависимым
   //Причина - в процессе компиляции может происходить копирование определений
@@ -405,10 +406,10 @@ begin
   begin
     api.add(build_synonims_from_assebmly(asm, visited_types));
   end;
- 
+  
   var wr := new StringBuilder();
   
-  var date:=DateTime.Now.ToString('yyyy.MM.dd. HH:mm:ss');
+  var date := DateTime.Now.ToString('yyyy.MM.dd. HH:mm:ss');
   wr.AppendLine($'//Auto-generated on {date}');
   wr.AppendLine($'unit {Path.GetFileNameWithoutExtension(balance.module_name)};');
   var mods_str := mods.Select(m -> Path.GetFileNameWithoutExtension(m.module_name)).JoinToString(', ');
@@ -444,12 +445,158 @@ begin
   end; 
   
   wr.AppendFormat($'{NewLine}begin{NewLine}end.');
-  result:=wr.ToString();
+  result := wr.ToString();
 end;
 
-begin
-  
-  writeln(build_synonims());
 
-  //writeln(build_api());
+//================================
+//  Command-line Argument Parser
+//================================
+type
+  [AttributeUsage(AttributeTargets.Field or AttributeTargets.Property)]
+  ArgAttribute = class(Attribute)
+  private
+    static no_command_const:=new object();
+  public
+    long_name, short_name, desc: string;
+    
+    constructor(long_name, short_name, desc: string);
+    begin
+      self.long_name := long_name;
+      self.short_name := short_name;
+      self.desc := desc;
+    end;
+  end;
+  
+  //--build-api=0 --build-api=1, build-api
+  AppConfig = class
+    
+  private
+    //static inv_comap:=System.Globalization.CultureInfo.InvariantCulture
+  public
+    [Arg('--build-facade=', nil, 'Generate the facade (balance.pas)')]
+    build_facade: boolean := true; //NOTE. By default, facade will be generated
+    
+    [Arg('--build-api=', nil, 'Generate API signatures for quick reference')]
+    build_api: boolean := true; //NOTE. By default, api will be generated
+        
+    [Arg('--yes', '-y', 'Overwrite existing files without confirmation')]
+    allow_overwrite: boolean := false;
+    
+    [Arg('--help', '-h', 'Show this help message')]
+    show_help: boolean := false;
+    
+    function confirm_overwrite_prompt(file_name: string): boolean;
+    begin
+      if allow_overwrite or not FileExists(file_name) then exit(true);
+      write($'File ''{file_name}'' already exists. Overwrite? (Y/n): ');
+      var ans: string;
+      readln(ans);
+      ans := ans.ToLower();
+      result := string.IsNullOrEmpty(ans) or (ans = 'y') or (ans = 'yes');
+    end;
+    
+    static function parse_value(val: string; typ: &Type): object;
+    begin
+      if typ = typeof(boolean) then
+      begin
+        if val = '1' then val := 'true' else
+        if val = '0' then val := 'false';
+      end;
+      result := Convert.ChangeType(val, typ);
+    end;
+    
+    static function get_fields() := 
+    typeof(AppConfig).GetFields(BindingFlags.Public or BindingFlags.Instance)
+      .Select(f -> new class(fld := f, attr := f.GetCustomAttribute&<ArgAttribute>()))
+      .Where(p -> p.attr <> nil).OrderBy(p -> p.attr.long_name);
+    
+    static function parse_args(args: array of string): AppConfig;
+    begin
+      result := new AppConfig();
+      var flags := BindingFlags.Public or BindingFlags.Instance;
+      var fields := get_fields();//result.GetType().GetFields(flags);
+      foreach var src_arg in args do
+      begin
+        var arg := src_arg.ToLowerInvariant();
+        var val: string := nil;
+        foreach var fld_attr in fields do
+        begin
+          var (fld, attr) := (fld_attr.fld, fld_attr.attr);
+          var fld_typ := fld.FieldType;
+          if attr.long_name.EndsWith('=') then
+          begin
+            if arg.StartsWith(attr.long_name) then
+              val := arg.Substring(attr.long_name.Length)
+            else if (attr.short_name <> nil) and (arg.StartsWith(attr.short_name)) then
+              val := arg.Substring(attr.short_name.Length);       
+          end else
+          begin
+            assert(fld_typ = typeof(boolean));
+            if (arg = attr.long_name) or ((attr.short_name <> nil) and (arg = attr.short_name)) then
+              val := 'true';
+          end;
+          if val <> nil then
+          begin
+            fld.SetValue(result, parse_value(val, fld_typ)); 
+            break;
+          end;
+        end;
+        if val = nil then
+          println($'[ArgParser] Warning: Argument "{arg}" was not recognized and will be ignored.');
+      end;
+    end;
+    
+    static function get_help(): string;
+    begin
+      var sb := new StringBuilder();
+      sb.AppendLine('=== Balance build script ===');
+      sb.AppendLine($'Usage: {Path.GetFileName(GetEXEFileName())} [options]');
+      sb.AppendLine();
+      sb.AppendLine('Available Options:'); 
+      var dflt_config := new AppConfig();
+      foreach var fld_attr in get_fields() do
+      begin
+        var (fld, attr) := (fld_attr.fld, fld_attr.attr);
+        var def_str := $'[{fld.GetValue(dflt_config).ToString().ToLowerInvariant()}]';
+        var pref := attr.short_name <> nil ? $'{attr.short_name}, ' : '';
+        sb.AppendLine($'{pref+attr.long_name,-20} {attr.desc} {def_str}');
+      end;      
+      result := sb.ToString();
+    end;
+  end;
+
+begin
+  var args := CommandLineArgs();
+  var print_help: ()->() := ()->begin write(AppConfig.get_help()); halt(); end;
+
+  var config := AppConfig.parse_args(args);
+  if config.show_help then
+    print_help();
+  
+  var any_action:=false;
+  if config.build_facade then
+  begin
+    var name := Path.Combine(GetCurrentDir(), balance.module_name);
+    if config.confirm_overwrite_prompt(name) then
+    begin
+      WriteAllText(name, build_synonims());
+      writeln($'OK. Facade was generated to {Path.GetFileName(name)}');
+    end;
+    any_action:=true;
+  end;
+  
+  if config.build_api then
+  begin
+    var name := Path.Combine(GetCurrentDir(), balance_api_file);
+    if config.confirm_overwrite_prompt(name) then
+    begin
+      WriteAllText(name, build_api());
+      writeln($'OK. API was generated to {Path.GetFileName(name)}');
+    end;
+    any_action:=true;
+  end;
+  
+  if not any_action then
+    print_help();
 end.
