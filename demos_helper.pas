@@ -74,6 +74,10 @@ type
     public constructor(kind: UIAttributeKind; text: string) := inherited create(kind, text);
   end;
   
+  UIComboBoxAttribute = class(UIDataAttribute)
+    public constructor(kind: UIAttributeKind; text: string := '') := inherited create(kind, text);
+  end;
+  
   UIRadioButtonAttribute = class(UIDataAttribute)
     public constructor(kind: UIAttributeKind; text: string := '') := inherited create(kind, text);
   end;
@@ -111,10 +115,10 @@ type
       end;
     end;
     
-    static function radio_button_get_display_name(enum_name: string): string;
+    static function get_display_name_for_enum_item(enum_item: string): string;
     begin
-      var base_name := enum_name.Substring(enum_name.LastIndexOf('_') + 1);
-      if String.IsNullOrEmpty(base_name) then exit(enum_name);
+      var base_name := enum_item.Substring(enum_item.LastIndexOf('_') + 1);
+      if String.IsNullOrEmpty(base_name) then exit(enum_item);
       var sb := new StringBuilder();
       sb.Append(base_name[1]); 
       var is_upper := char.IsUpper;

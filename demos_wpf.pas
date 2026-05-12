@@ -88,6 +88,18 @@ type
     end;
   end;
   
+  DemoComboBoxWPF = class(ComboBoxWPF)
+  private
+    function get_cb: System.Windows.Controls.ComboBox;
+    begin
+      var p := System.Windows.Controls.Panel(self.element);
+      result := System.Windows.Controls.ComboBox(p.Children[1]);
+    end;
+  public
+    procedure set_selected_index(ind: integer) := Invoke(procedure(v: integer) -> get_cb().SelectedIndex := v, ind);
+    procedure set_selected_text(txt: string) := Invoke(procedure(s: string) -> get_cb().SelectedItem := s, txt);
+  end;
+  
   ScenePanelWPF = class(RightPanelWPF)
   public
     property parent: System.Windows.FrameworkElement read (System.Windows.FrameworkElement)(element.Parent);
@@ -236,6 +248,17 @@ type
       elem.Checked := boolean(UIHelper.get_member_val(m, ctx.owner));
       elem.Click := ()->on_changed(ctx, attr.kind, elem.Checked, m);
     end;
+        
+    static procedure create_element(ctx: UISceneWPFBuilderCtx; attr: UIComboboxAttribute; m: MemberInfo);
+    begin
+      var elem := new DemoComboBoxWPF(display_text(attr, ctx.ind));
+      var enum_type := UIHelper.get_member_type(m);
+      var val_str := UIHelper.get_member_val(m, ctx.owner).ToString();
+      var full_names := System.Enum.GetNames(enum_type);
+      full_names.ForEach(n->elem.Add(UIHelper.get_display_name_for_enum_item(n)));
+      elem.set_selected_index(&Array.IndexOf(full_names, val_str));
+      elem.SelectionChanged := () -> on_changed(ctx, attr.kind, Enum.Parse(enum_type, full_names[elem.SelectedIndex]), m);
+    end;
     
     static procedure create_element(ctx: UISceneWPFBuilderCtx; attr: UIRadiobuttonAttribute; m: MemberInfo);
     begin
@@ -247,7 +270,7 @@ type
       var val_str := UIHelper.get_member_val(m, ctx.owner).ToString();
       foreach var full_name in System.Enum.GetNames(enum_type) do
       begin
-        var rb := RadioButton(UIHelper.radio_button_get_display_name(full_name));
+        var rb := RadioButton(UIHelper.get_display_name_for_enum_item(full_name));
         if full_name = val_str then rb.Checked := true;
         rb.Click := () -> on_changed(ctx, attr.kind, Enum.Parse(enum_type, full_name), m);
       end;
@@ -286,6 +309,7 @@ type
           UISliderIntAttribute(var attr): create_element(ctx, attr, m);
           UISliderRealAttribute(var attr): create_element(ctx, attr, m);
           UICheckboxAttribute(var attr): create_element(ctx, attr, m);
+          UIComboboxAttribute(var attr): create_element(ctx, attr, m);
           UIRadioButtonAttribute(var attr): create_element(ctx, attr, m);
           UIButtonAttribute(var attr): create_element(ctx, attr, m as MethodInfo);
           else assert(false, $'Unimplemented attribute: {ui_attr}');
