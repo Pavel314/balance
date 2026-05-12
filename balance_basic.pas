@@ -1,4 +1,5 @@
 ﻿unit balance_basic;
+uses System;
 //TODO MethodImplOptions.AggressiveInlining 
 
 function unwrap_or<T>(self: T?; def: T): T; extensionmethod; where T: record;
@@ -226,9 +227,11 @@ type
       if v > max then max := v;     
     end;
     
-    static function overlap(l, r: MinMax) := pabcsystem.min(l.max, r.max) - pabcsystem.max(l.min, r.min);//pabcsystem.Min(r.max - l.min, l.max - r.min); //
+    static function overlap(l, r: MinMax) := Math.Min(l.max, r.max) - Math.Max(l.min, r.min);
     static function contains(l, r: MinMax) := (l.min <= r.min) and (l.max >= r.max);
   end;
+  
+  BoxFillMode = (BoxStretch, BoxFit, BoxCover);
   
   BoundBox = record
     min_x, min_y, max_x, max_y: real;
@@ -286,8 +289,18 @@ type
     function contains(v: Vector) := (v.x >= min_x) and (v.x <= max_x) and (v.y >= min_y) and (v.y <= max_y);
     
     static function crop(a, b: BoundBox) := new BoundBox(
-    pabcsystem.max(a.min_x, b.min_x), pabcsystem.max(a.min_y, b.min_y),
-    pabcsystem.min(a.max_x, b.max_x), pabcsystem.min(a.max_y, b.max_y));
+    Math.Max(a.min_x, b.min_x), Math.Max(a.min_y, b.min_y),
+    Math.Min(a.max_x, b.max_x), Math.Min(a.max_y, b.max_y));
+    
+    function remap(p: Vector; dst: BoundBox; mode: BoxFillMode := BoxFillMode.BoxStretch): Vector;
+    begin
+      var (sw, sh) := (dst.width / width, dst.height / height);
+      case mode of
+        BoxFillMode.BoxStretch: result := Vector.create((p.x - min.x) * sw, (p.y - min.y) * sh) + dst.min;
+        BoxFillMode.BoxFit: result := (p - center) * Math.Min(sw, sh) + dst.center;
+        BoxFillMode.BoxCover: result := (p - center) * Math.Max(sw, sh) + dst.center;
+      end;
+    end;
     
     function translate(v: Vector) := new BoundBox(min_x + v.x, min_y + v.y, max_x + v.x, max_y + v.y);
     
@@ -347,22 +360,25 @@ type
     ref_w, ref_h: real;
     /// Область вывода на экране (в пикселях)
     screen: BoundBox;
+    screen_y_down: boolean := true;
     
     property base_zoom: real read m_base_zoom;
     property total_zoom: real read cam.zoom * base_zoom;
+    property screen_y_dir: real read screen_y_down ? -1.0 : 1.0;
     
-    constructor create(cam: Camera; ref_w, ref_h: real; screen: BoundBox; mode: ViewportResizeMode);
+    constructor create(cam: Camera; ref_w, ref_h: real; screen: BoundBox; mode: ViewportResizeMode; screen_y_down: boolean := true);
     begin
       self.cam := cam;
       (self.ref_w, self.ref_h) := (ref_w, ref_h);
       self.screen := screen;
       self.mode := mode;
+      self.screen_y_down := screen_y_down;
       self.m_base_zoom := 1.0;
       resize(screen);
     end;
     
     
-    constructor create(cam: Camera; ref_w, ref_h: real; screen_w, screen_h: real; mode: ViewportResizeMode) := create(cam, ref_w, ref_h, BoundBox.from_xywh(0, 0, screen_w, screen_h), mode);
+    constructor create(cam: Camera; ref_w, ref_h: real; screen_w, screen_h: real; mode: ViewportResizeMode; screen_y_down: boolean := true) := create(cam, ref_w, ref_h, BoundBox.from_xywh(0, 0, screen_w, screen_h), mode, screen_y_down);
     
     static function fixed_zoom(cam: Camera; screen_w, screen_h: real): Viewport :=
     new Viewport(cam, real.PositiveInfinity, real.PositiveInfinity, screen_w, screen_h, ViewportFixedZoom);
@@ -398,19 +414,19 @@ type
     begin
       var local := cam.tr.unapply(world) * total_zoom;
       var sc := self.screen.center;
-      result := new Vector(local.x + sc.x, -local.y + sc.y);
+      result := new Vector(local.x + sc.x, local.y * screen_y_dir + sc.y);
     end;
     
     function to_screen(world: real) := world * total_zoom;
     function to_world(screen: Vector): Vector;
     begin
       var sc := self.screen.center;
-      var local := new Vector((screen.x - sc.x), sc.y - screen.y);
+      var local := new Vector((screen.x - sc.x), (screen.y - sc.y) * screen_y_dir);
       result := cam.tr.apply(local / total_zoom);
     end;
     
     function to_world(world: real) := world / total_zoom;
-  end;  
+  end;
   
   Utils = static class 
   public
