@@ -42,7 +42,7 @@ type
       var mat := Material.from_frd(0.5, 0, 1.0);
       begin
         var box := bl_group(Polygon.box(100 * 2, 1 * 2));
-        world.add_body(box, bl_vect(0, -1), 0, is_static := true, mat:=mat);
+        world.add_body(box, bl_vect(0, -1), 0, is_static := true, mat := mat);
       end;
       
       begin
@@ -277,7 +277,7 @@ type
     [UISliderReal(UIAttributeHot, 'Torque', 0, 10, 0.1)]
     ui_torque: real := 5;   
     [UICheckbox(UIAttributeHot, 'Auto gas')]
-    ui_autogas: boolean := true;
+    ui_autogas: boolean := false;
     [UIRadioButton(UIAttributeHot)]
     ui_drive_mode: CarDriveMode := CarDriveMode.Car_AWD;
     
@@ -428,23 +428,97 @@ type
         l_flipj.ang_motor.run(-10.0);
         r_flipj.ang_motor.run(10.0);
       end;
-      limit_velocity(ball, 40);
+      limit_velocity(ball, 35);
     end;
   end;
   
+  MiniShapesParamHelper = class
+  public
+    static function pnt_cmp(v1, v2: Vector; bbox: BoundBox): integer;
+    begin
+      var n := 512;
+      var grid := BoundBox.from_xywh(0, 0, n - 1, n - 1);
+      var (p1, p2) := (bbox.remap(v1, grid), bbox.remap(v2, grid));
+      var ind1 := pos_to_index_hilbert(Round(p1.x), Round(p1.y), n);
+      var ind2 := pos_to_index_hilbert(Round(p2.x), Round(p2.y), n);      
+      result := ind1.CompareTo(ind2);
+    end;
+  
+  private
+    points: array of Vector;
+    targets: Dictionary<RigidBody, Vector>;
+    param_ind: integer;
+  public
+    procedure add_new_body(b: RigidBody);
+    begin
+      targets.Add(b, points[param_ind]);  
+      param_ind += 1;
+    end;
+    
+    procedure generate_targets(bodies: IEnumerable<RigidBody>; max_count: integer; view: Viewport; curve: ParametricCurve);
+    begin
+      param_ind := 0;
+      var bbox := view.get_world_bbox();
+      points :=  curve.generate_points(max_count, bbox.inflated(-0.1));
+      points.Sort((v1, v2) -> pnt_cmp(v1, v2, bbox));
+      var lbodies := bodies.ToList();
+      assert(lbodies.Count <= max_count);
+      lbodies.Sort((b1, b2) -> pnt_cmp(b1.pos, b2.pos, bbox));
+      targets := new Dictionary<RigidBody, Vector>(max_count, new ReferenceEqualityComparer<RigidBody>());
+      for var i := 0 to lbodies.Count - 1 do
+        add_new_body(lbodies[i]);
+    end;
+    
+    function get_target(b: RigidBody) := targets[b];
+  end;
+
+type
+  MiniShapesParamCurve = (Param_None, Param_Circle, Param_Square, Param_Astroid, Param_Lissajous, Param_Spiral, Param_Star, Param_Flower5, Param_Flower4, Param_Infinity, Param_Heart);
+  
   [SceneName('Mini Shapes')]
   MiniShapesScene = class(BaseScene)
+  public
+    static curves: Dictionary<MiniShapesParamCurve, ParametricCurve>;
+    static constructor();
+    begin
+      var polar := ParametricCurve.polar;
+      var param := ParametricCurve.param;
+      curves := dict(
+      (Param_None, ParametricCurve(nil)),
+      (Param_Circle, polar(0, 2 * pi, t -> 1)),
+      (Param_Square, polar(0, 2 * pi, t -> 1 / (abs(cos(t)) + abs(sin(t))))),
+      (Param_Astroid, param( 0, 2 * pi, t -> bl_vect(power(cos(t), 3), power(sin(t), 3)))),
+      (Param_Lissajous, param( 0, 2 * pi, t -> bl_vect(sin(3 * t), sin(2 * t)))),
+      (Param_Spiral, polar(0, 8 * pi, t -> 1 - (t / (8 * PI)))),
+      (Param_Star, ParametricCurve.star_polygon(5, 5 * 2 / 4)),
+      (Param_Flower5, ParametricCurve.flower1(5)),
+      (Param_Flower4, polar(0, 2 * PI, t -> (cos(t) * sin(t)) / (abs(cos(2 * t)) + abs(sin(2 * t))))),
+      (Param_Infinity, param(0, 2 * pi, t -> bl_vect(cos(t), sin(t) * cos(t)) / (1 + sin(t) ** 2))),
+      (Param_Heart, param( 0, 2 * PI, t -> bl_vect(16 * sin(t) ** 3, 13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t)))));
+      assert(curves.Count = System.Enum.GetNames(typeof(MiniShapesParamCurve)).Length, 'Parametric curves count does not match');
+    end;
+    
+    public static procedure add_pd_force(b: RigidBody; target: Vector; stiffness, damping: real);
+    begin
+      var dist := target - b.pos;
+      var force := dist * stiffness - b.vel * damping;
+      b.add_force(force * b.mass); 
+    end;
+  
   private
     demo_tag := new object();
     mouse_follow_damp := new Damping(0.9, 0.9, en := false);
+    m_helper: MiniShapesParamHelper;
+  
   public
     const sz = 0.5;
+    const start_avel = 6*pi;
     
     [UISliderInt(UIAttributeReset, 'Max Objects', 10, 800, 10)]
     ui_objs_count: integer := 100;
     
-    [UISliderReal(UIAttributeReset, 'Start Impulse', 0, 1, 0.1)]
-    ui_start_impulse: real := 0.5;
+    [UISliderReal(UIAttributeHot, 'Start Speed', 0, 10, 1)]
+    ui_start_speed: real := 6;
     
     [UISliderReal(UIAttributeReset, 'Circle probability', 0, 1, 0.1)]
     ui_circle_prob: real := 0.3;
@@ -458,9 +532,28 @@ type
     [UICheckbox(UIAttributeHot, 'Mouse Follow')]
     ui_mouse_follow: boolean := false;
     
+    [UIComboBox(UIAttributeHot, 'Parametric Curve')]
+    ui_param_curve: MiniShapesParamCurve := MiniShapesParamCurve.Param_None;
+    
+    last_param_curve: MiniShapesParamCurve ? := nil;
+    
+    [UIButton(UIAttributeHot, 'Add speed')]
+    procedure add_speed();
+    begin
+      for var i := 0 to m_world.bodies.Count - 1 do
+      begin
+        var b := m_world.bodies[i];
+        if not object.ReferenceEquals(b.tag, demo_tag) then continue;
+        b.vel += b.pos.Unortog().norm() * ui_start_speed;
+        b.avel += random(-start_avel, start_avel);
+      end;
+    end;
+    
+    function has_parametric() := ui_param_curve <> MiniShapesParamCurve.Param_None;
+    
     function reset_on_resize(): boolean; override := true;
     
-    procedure add_random_shape(pos: Vector);
+    function add_random_shape(pos: Vector): RigidBody;
     begin
       var r := sz * 0.5;
       var shape: Shape;
@@ -468,9 +561,11 @@ type
         shape := new Circle(r)
       else
         shape := Polygon.regular(Random(3, 12), r);
-      var body := m_world.add_body(bl_group(shape), pos, damp := mouse_follow_damp, tag := demo_tag);
-      var rv: real-> Vector := x -> bl_vect(Random(-x, x), Random(-x, x));
-      body.add_impulse_r(rv(ui_start_impulse), rv(r));
+      var b := m_world.add_body(bl_group(shape), pos, damp := mouse_follow_damp, tag := demo_tag);
+      b.vel := rand_unit_vect() * random(ui_start_speed);
+      b.avel := random(-start_avel, start_avel);
+      if has_parametric then m_helper.add_new_body(b);
+      result := b;
     end;
     
     procedure reset(w, h: real); override;
@@ -479,10 +574,22 @@ type
       var side := sqrt(ui_objs_count) * sz * 2.5;
       m_view := Viewport.fixed_zoom(new Camera(bl_vect0, Min(w / side, h / side)), w, h);
       world.set_bounds(m_view.get_world_bbox(), -5);
+      
+      last_param_curve := nil;
+      m_helper :=  new MiniShapesParamHelper();
     end;
     
     procedure pre_frame(input: IInputSource); override;
     begin
+      var ref_eql := object.ReferenceEquals;
+      
+      if (ui_param_curve <> last_param_curve) then
+      begin
+        if has_parametric then
+          m_helper.generate_targets(m_world.bodies.Where(b -> ref_eql(b.tag, demo_tag)), ui_objs_count, m_view, curves[ui_param_curve]);
+        last_param_curve := ui_param_curve;
+      end;
+      
       var mat := Material.from_frd(ui_fric, ui_rest, 1.0);
       m_world.bounds_body.mat := mat;
       var mouse_btn: integer;
@@ -496,21 +603,28 @@ type
       for var i := 0 to m_world.bodies.Count - 1 do
       begin
         var b := m_world.bodies[i];
-        if not object.ReferenceEquals(b.tag, demo_tag) then continue;
+        if not ref_eql(b.tag, demo_tag) then continue;
         b.mat := mat;
+        b.damp.enabled := false;
+        
+        if has_parametric then
+        begin
+          add_pd_force(b, m_helper.get_target(b), 2, 2);
+          b.damp.enabled := true;
+        end;
+        
         if ui_mouse_follow then 
         begin
-          var dir :=  mouse_pos - b.pos; 
-          b.add_force(dir.norm()); 
-          b.damp.enabled := true;   
-        end 
-        else
-          b.damp.enabled := false;
+          add_pd_force(b, mouse_pos, 2, 1.5);
+          b.damp.enabled := true; 
+        end;
       end;
       
       if m_world.bodies.Count < ui_objs_count then
         add_random_shape(bl_vect0);
     end;
+    
+    public add_speedd := add_speed; // Keep delegate to prevent dead code compiler optimization
   end;
 
 const

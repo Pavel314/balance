@@ -369,6 +369,7 @@ begin
     b.vel := v.norm() * max_vel;
 end;
 
+
 var
   __fps := new FpsCounter();
 
@@ -377,6 +378,58 @@ procedure start_fps() := __fps.start();
 function stop_fps() := __fps.stop();
 
 type
+  ReferenceEqualityComparer<TKey> = class(IEqualityComparer<TKey>) where TKey: class;
+  public
+    function Equals(x, y: TKey) := object.ReferenceEquals(x, y);
+    function GetHashCode(obj: TKey) := System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+  end;
+  
+  ParametricCurve = class  
+  private
+    m_a, m_b: real;
+    m_func: real-> Vector;
+  public
+    property a: real read m_a;
+    property b: real read m_b;
+    property func: real-> Vector read m_func;
+    
+    constructor(a, b: real; func: real-> Vector);
+    begin
+      (self.m_a, self.m_b) := (a, b);
+      self.m_func := func;
+    end;
+    
+    static function param(a, b: real; func: real-> Vector) := new ParametricCurve(a, b, func);
+    static function polar(a, b: real; func: real-> real) := new ParametricCurve(a, b, t -> bl_vect(cos(t), sin(t)) * func(t));
+    
+    function generate_points(count: integer; target_bbox: BoundBox): array of Vector;
+    begin
+      var pts := new Vector[count];
+      var local_bbox := BoundBox.empty();
+      for var i := 0 to count - 1 do
+      begin
+        pts[i] := func(lerp(self.a, self.b, i / (count - 1)));
+        local_bbox.extend(pts[i]);
+      end;
+      for var i := 0 to count - 1 do
+        pts[i] := local_bbox.remap(pts[i], target_bbox, BoxFillMode.BoxFit);
+      result := pts;
+    end;
+    
+    static function f_mod(a, b: real) := a - System.Math.Truncate(a / b) * b;
+    
+    static function flower1(n: integer) := new ParametricCurve(0, 2 * n * pi, t -> begin
+      var v := bl_vect(cos(t) + 1, (sin(t) * abs(sin(t))) / 1.69);
+      var a := (t - f_mod(t, 2 * pi)) / n; 
+      result := Transform.create(bl_vect0, a + pi / (2 * n)).apply(v);
+    end);
+    
+    static function star_polygon(n, a: real) := polar(0, 2 * pi, t -> begin
+      var cs := arccos(cos((t - pi * 0.5) * n));
+      result := cos(pi / a) / cos(cs / n - (pi / a));
+    end); 
+  end;
+  
   SimpleGridLayout = record
     step: Vector;
     total_sz: Vector;
@@ -411,20 +464,45 @@ type
   
   BaseScene = abstract class
   private
-    m_reset_on_resize:boolean;
+    m_reset_on_resize: boolean;
   protected
     m_world: PhysWorld;
     m_view: Viewport;
   public
     property world: PhysWorld read m_world;
     property view: Viewport read m_view;
-    function reset_on_resize():boolean; virtual := false;
+    function reset_on_resize(): boolean; virtual := false;
     procedure reset(w, h: real); abstract;
     procedure pre_frame(input: IInputSource); virtual;begin end;
+    
     procedure post_frame(input: IInputSource; steps: integer); virtual;begin end;
   end;
 
 function random_step(min, max, step: real) := min + pabcsystem.Random(Round((max - min) / step) + 1) * step;
+
+function rand_vect(v: real) := bl_vect(pabcsystem.random(-v, v), pabcsystem.random(-v, v));
+
+function rand_unit_vect() := bl_vect(cos(pabcsystem.random(2 * pi)), sin(pabcsystem.random(2 * pi)));
+
+function pos_to_index_hilbert(x, y: integer; n: integer): integer;
+begin
+  assert((n > 0) and ((n and (n - 1)) = 0), 'It is not a power of two');
+  result := 0;
+  n := n shr 1;
+  while n > 0 do
+  begin
+    var rx := (x and n) > 0 ? 1 : 0;
+    var ry := (y and n) > 0 ? 1 : 0;
+    result += n * n * ((3 * rx) xor ry);
+    if ry = 0 then
+    begin
+      if rx = 1 then 
+        (x, y) := (n - 1 - x, n - 1 - y);
+      swap(x, y);
+    end;
+    n := n shr 1;
+  end;
+end;
 
 begin
 
