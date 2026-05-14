@@ -101,12 +101,34 @@ type
     procedure set_selected_text(txt: string) := Invoke(procedure(s: string) -> get_cb().SelectedItem := s, txt);
   end;
   
-  ScenePanelWPF = class(RightPanelWPF)
+  DemoPanelWPF = class(PanelWPF)
+  private
+    m_root: System.Windows.Controls.Border;
   public
-    property parent: System.Windows.FrameworkElement read (System.Windows.FrameworkElement)(element.Parent);
+    property panel: System.Windows.Controls.StackPanel read self.element as System.Windows.Controls.StackPanel;
+    property root: System.Windows.Controls.Border read m_root;
     property Visible: boolean
-    read InvokeBoolean(() ->  parent.Visibility = System.Windows.Visibility.Visible)
-    write Invoke(procedure(v: boolean) -> parent.Visibility := v ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed, value);
+    read InvokeBoolean(() ->  root.Visibility = System.Windows.Visibility.Visible)
+    write Invoke(procedure(v: boolean) -> root.Visibility := v ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed, value);
+    procedure make_vert_scrollable();
+    begin
+      Invoke(()-> 
+      begin
+        var scroll := new System.Windows.Controls.ScrollViewer();
+        scroll.VerticalScrollBarVisibility := System.Windows.Controls.ScrollBarVisibility.Auto;
+        scroll.HorizontalScrollBarVisibility := System.Windows.Controls.ScrollBarVisibility.Disabled;
+        root.Child := nil; 
+        scroll.Content := panel;
+        root.Child := scroll;
+      end);
+    end;
+    
+    constructor create(width: real; d: Dock; vscroll: boolean := true);
+    begin
+      inherited create(width, d, PanelsColor, 10);
+      m_root := panel.Parent as System.Windows.Controls.Border;
+      if vscroll then make_vert_scrollable();
+    end;
   end;
   
   DemoUI = class
@@ -126,27 +148,32 @@ type
     end;
   
   public
-    dem_list: ListBoxWPF;
-    dem_reset: ButtonWPF;
+    sc_list: ListBoxWPF;
+    sc_reset: ButtonWPF;
+    sc_show_prms: CheckBoxWPF;
+    
+    wrd_grav, wrd_hz: SliderRealWPF;
     
     slv_iters: SliderWPF;
     slv_warm_factor, slv_baumgarte, slv_pos_slop, slv_vel_slop: SliderRealWPF;
     
-    msc_show_prms: CheckBoxWPF;
     dbg_aabb, dbg_vels, dbg_cons: CheckBoxWPF;
     
     procedure add_demos(names: IEnumerable<string>; on_demo_selected: (integer)->());
     begin
-      //NOTE dem_list.clear not provided
-      names.ForEach(name -> dem_list.Add(name));
-      dem_list.SelectionChanged := ()->on_demo_selected(dem_list.SelectedIndex);
-      dem_list.SelectedIndex := 0;
+      //NOTE sc_list.clear not provided
+      names.ForEach(name -> sc_list.Add(name));
+      sc_list.SelectionChanged := ()->on_demo_selected(sc_list.SelectedIndex);
+      sc_list.SelectedIndex := 0;
     end;
     
-    procedure solver_sync(solver: CollisionResolver; from_ui_to_solver: boolean);
+    procedure world_sync(world: PhysWorld; from_ui_to_solver: boolean);
     begin
+      var solver := world.solver;
       if from_ui_to_solver then
       begin
+        world.grav := bl_vect(0, -wrd_grav.Value);
+        world.ticker.freq := wrd_hz.Value;
         solver.iters := slv_iters.Value;
         solver.warm_factor := slv_warm_factor.Value;
         solver.baumgarte := slv_baumgarte.Value;
@@ -154,6 +181,10 @@ type
         solver.vel_slop := slv_vel_slop.Value
       end else 
       begin
+        slider_set(wrd_grav, -world.grav.y);
+        slider_set(wrd_hz, world.ticker.freq);
+        world.ticker.freq := wrd_hz.Value;
+        
         slider_set(slv_iters, solver.iters);
         slider_set(slv_warm_factor, solver.warm_factor);
         slider_set(slv_baumgarte, solver.baumgarte);
@@ -164,8 +195,19 @@ type
     
     constructor create(reset_click: ()->(); show_prms_click: boolean->());
     begin
-      LeftPanel(170);
-      dem_list := new DemoListBoxWPF('', 130); //ListBox('', 130);//ComboBox();
+      new DemoPanelWPF(170, Dock.Left);
+      sc_list := new DemoListBoxWPF('', 130);
+      
+      sc_reset := Button('Reset');
+      sc_reset.Click := reset_click; 
+      
+      sc_show_prms := CheckBox('Show parameters');
+      sc_show_prms.Click := ()->show_prms_click(sc_show_prms.Checked);
+      sc_show_prms.Checked := true;
+      
+      TextBlock('World');
+      wrd_grav := SliderReal('Gravity', 0, 15, freq := 1);
+      wrd_hz := SliderReal('Hertz', 5, 240, freq := 5);
       
       TextBlock('Solver');
       slv_iters := Slider('Iterations', 2, 30, freq := 2);
@@ -178,14 +220,6 @@ type
       dbg_aabb := CheckBox('Bound boxes');
       dbg_vels := CheckBox('Velocities');
       dbg_cons := CheckBox('Contacts');
-      
-      TextBlock('Misc');
-      msc_show_prms := CheckBox('Show parameters');
-      msc_show_prms.Click := ()->show_prms_click(msc_show_prms.Checked);
-      msc_show_prms.Checked := true;
-      
-      dem_reset := Button('Reset');
-      dem_reset.Click := reset_click; 
     end;
   end;
   
@@ -319,15 +353,15 @@ type
     end;
   
   public
-    static function build_ui(sc: BaseScene; on_reset: ()->(); width: real; title: string): ScenePanelWPF;
+    static function build_ui(sc: BaseScene; on_reset: ()->(); width: real; title: string): DemoPanelWPF;
     begin
-      var create_scene_panel: Func<ScenePanelWPF> := ()->
+      var create_scene_panel: Func<DemoPanelWPF> := ()->
       begin
-        result := new ScenePanelWPF(width);
+        result := new DemoPanelWPF(width, Dock.Right);
         if not string.IsNullOrEmpty(title) then
           TextBlock(title);
       end;
-      var sc_panel: ScenePanelWPF;// := create_scene_panel();;
+      var sc_panel: DemoPanelWPF;// := create_scene_panel();;
       var ctx := new UISceneWPFBuilderCtx(on_reset, ()->begin if sc_panel = nil then sc_panel := create_scene_panel(); end, sc, -1);
       build_ui_step(ctx);
       result := sc_panel;
@@ -339,7 +373,7 @@ var
   ui: DemoUI;
   input: InputSystemWPF;
   sc: BaseScene;
-  sc_panel: ScenePanelWPF;
+  sc_panel: DemoPanelWPF;
 
 procedure reset_scene() := sc.reset(Canvas.Width, Canvas.Height);
 
@@ -362,10 +396,10 @@ begin
   sc := BaseScene(Activator.CreateInstance(all_scenes[ind]));
   sc.on_reset := sc -> input.reset(sc.world);
   reset_scene();
-  ui.solver_sync(sc.world.solver, false);
-  if sc_panel <> nil then Invoke(() ->MainDockPanel.Children.Remove(sc_panel.parent));
-  sc_panel := UISceneWPFBuilder.build_ui(sc, reset_scene, 170, 'Demo parameters');
-  ui.msc_show_prms.Click();
+  ui.world_sync(sc.world, false);
+  if sc_panel <> nil then Invoke(() ->MainDockPanel.Children.Remove(sc_panel.root));
+  sc_panel := UISceneWPFBuilder.build_ui(sc, reset_scene, 170, 'Scene parameters');
+  ui.sc_show_prms.Click();
   on_resize();
 end;
 
@@ -373,7 +407,7 @@ procedure on_frame(dt: real);
 begin
   sc.pre_frame(input);
   input.on_frame(dt, sc.world);
-  ui.solver_sync(sc.world.solver, true);
+  ui.world_sync(sc.world, true);
   
   start_fps();
   var steps := sc.world.simulate(dt);
