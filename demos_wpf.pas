@@ -95,6 +95,7 @@ type
       var p := System.Windows.Controls.Panel(self.element);
       result := System.Windows.Controls.ComboBox(p.Children[1]);
     end;
+  
   public
     procedure set_selected_index(ind: integer) := Invoke(procedure(v: integer) -> get_cb().SelectedIndex := v, ind);
     procedure set_selected_text(txt: string) := Invoke(procedure(s: string) -> get_cb().SelectedItem := s, txt);
@@ -202,7 +203,7 @@ type
     
     function replace(owner: object; ind: integer) := new UISceneWPFBuilderCtx(on_reset, on_step, owner, ind);
     
-    procedure call_fist_step();
+    procedure call_step();
     begin
       if on_step <> nil then on_step();
     end;
@@ -248,14 +249,14 @@ type
       elem.Checked := boolean(UIHelper.get_member_val(m, ctx.owner));
       elem.Click := ()->on_changed(ctx, attr.kind, elem.Checked, m);
     end;
-        
+    
     static procedure create_element(ctx: UISceneWPFBuilderCtx; attr: UIComboboxAttribute; m: MemberInfo);
     begin
       var elem := new DemoComboBoxWPF(display_text(attr, ctx.ind));
       var enum_type := UIHelper.get_member_type(m);
       var val_str := UIHelper.get_member_val(m, ctx.owner).ToString();
       var full_names := System.Enum.GetNames(enum_type);
-      full_names.ForEach(n->elem.Add(UIHelper.get_display_name_for_enum_item(n)));
+      full_names.ForEach(n -> elem.Add(UIHelper.get_display_name_for_enum_item(n)));
       elem.set_selected_index(&Array.IndexOf(full_names, val_str));
       elem.SelectionChanged := () -> on_changed(ctx, attr.kind, Enum.Parse(enum_type, full_names[elem.SelectedIndex]), m);
     end;
@@ -293,7 +294,7 @@ type
       begin
         var ui_attr := m.GetCustomAttribute&<UIBuilderAttribute>();
         if ui_attr = nil then continue;
-        ctx.call_fist_step();
+        ctx.call_step();
         match ui_attr with
           UIExpandAttribute(var attr): 
             begin
@@ -340,13 +341,12 @@ var
   sc: BaseScene;
   sc_panel: ScenePanelWPF;
 
+procedure reset_scene() := sc.reset(Canvas.Width, Canvas.Height);
+
 procedure on_resize();
 begin
   Canvas.resized();
-  if sc.reset_on_resize() then
-    sc.reset(Canvas.Width, Canvas.Height)
-  else
-    sc.view.resize(Canvas.Width, Canvas.Height);
+  sc.resize(Canvas.Width, Canvas.Height)
 end;
 
 procedure on_show_prms_changed(checked: boolean);
@@ -356,26 +356,17 @@ begin
   on_resize();
 end;
 
-procedure on_demo_reset(old_sc: BaseScene);
-begin
-  if old_sc <> nil then input.reset(old_sc.world);
-  var ref_eql := object.ReferenceEquals(old_sc, sc);
-  sc.reset(Canvas.Width, Canvas.Height);
-  if not ref_eql then 
-  begin
-    ui.solver_sync(sc.world.solver, false);
-    if sc_panel <> nil then Invoke(() ->MainDockPanel.Children.Remove(sc_panel.parent));
-    sc_panel := UISceneWPFBuilder.build_ui(sc, ()->on_demo_reset(sc), 170, 'Demo parameters');
-    ui.msc_show_prms.Click();
-    on_resize();
-  end;
-end;
-
 procedure on_demo_select(ind: integer);
 begin
-  var old_sc := sc;
+  if sc <> nil then input.reset(sc.world);
   sc := BaseScene(Activator.CreateInstance(all_scenes[ind]));
-  on_demo_reset(old_sc);
+  sc.on_reset := sc -> input.reset(sc.world);
+  reset_scene();
+  ui.solver_sync(sc.world.solver, false);
+  if sc_panel <> nil then Invoke(() ->MainDockPanel.Children.Remove(sc_panel.parent));
+  sc_panel := UISceneWPFBuilder.build_ui(sc, reset_scene, 170, 'Demo parameters');
+  ui.msc_show_prms.Click();
+  on_resize();
 end;
 
 procedure on_frame(dt: real);
@@ -397,16 +388,16 @@ end;
 
 begin
   Window.Title := 'Balance Demos 02.05.2026';
-  ui := new DemoUI(()->on_demo_reset(sc), ch -> on_show_prms_changed(ch));
+  Window.Maximize();
+  ui := new DemoUI(reset_scene, ch -> on_show_prms_changed(ch));
   input := new InputSystemWPF();
   ui.add_demos(all_scenes.Select(s -> s.GetCustomAttribute&<SceneNameAttribute>().name), on_demo_select);
   Pen.Color := Colors.White;
   OnKeyDown += k -> input.on_key_down(k);
   OnKeyUp += k -> input.on_key_up(k);
   OnMouseDown += (x, y, md) -> input.on_mouse_down(x, y, md, sc.world, sc.view);
-  OnMouseUP += (x, y, md) -> input.on_mouse_up(x, y, md, sc.world, sc.view);
+  OnMouseUp += (x, y, md) -> input.on_mouse_up(x, y, md, sc.world, sc.view);
   OnMouseMove += (x, y, md) -> input.on_mouse_move(x, y, md, sc.world, sc.view);
   OnDrawFrame += on_frame;
   OnResize += on_resize;
-  Window.Maximize();
 end.

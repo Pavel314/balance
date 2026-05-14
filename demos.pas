@@ -8,6 +8,7 @@ type
   public
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       m_world := new PhysWorld(bl_vect(0, -9.8));
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 14), 35 * 0.6), w, h);
       begin
@@ -36,6 +37,7 @@ type
   public
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       m_world := new PhysWorld(bl_vect(0, -9.8));
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 4), 200 * 0.25), w, h);
       
@@ -79,6 +81,7 @@ type
     
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       var grid := new SimpleGridLayout(ui_cols, ui_rows, bl_vect(sz, sz), bl_vect(ui_gap, 0));
       m_world := new PhysWorld(bl_vect(0, -9.8));
       var bbox := grid.bbox.expand(sz * 4, sz, sz * 4, 0);
@@ -159,6 +162,7 @@ type
     
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       var grid := new SimpleGridLayout(springs_count, 1, bl_vect(sz, scene_h), bl_vect(gap, 0));
       var bbox := grid.bbox;
       
@@ -185,6 +189,7 @@ type
     
     procedure pre_frame(input: IInputSource); override;
     begin
+      inherited pre_frame(input);
       for var i := 0 to springs_count - 1 do
       begin
         var spring := j_springs[i];
@@ -223,6 +228,7 @@ type
     
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       var scene_h := ui_thread_length + border_h;
       var grid := new SimpleGridLayout(ui_ball_count, 1, bl_vect(sz, scene_h), bl_vect(sz / 20, 0), bl_vect(0, 0.5));
       
@@ -254,6 +260,7 @@ type
     
     procedure pre_frame(input: IInputSource); override;
     begin
+      inherited pre_frame(input);
       foreach var b in m_world.bodies do
       begin
         if object.ReferenceEquals(b.tag, demo_tag) then
@@ -283,6 +290,7 @@ type
     
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       m_world := new PhysWorld(bl_vect(0, -9.8));
       m_view := Viewport.fixed_height(new Camera(bl_vect(0, 4)), 20, w, h);
       
@@ -339,6 +347,7 @@ type
     
     procedure pre_frame(input: IInputSource); override;
     begin
+      inherited pre_frame(input);
       var is_down := input.is_key_down;
       if is_down('D') then car.run_motor(-ui_speed, ui_torque, mode := ui_drive_mode)
       else if is_down('A') then car.run_motor(ui_speed, ui_torque, mode := ui_drive_mode)
@@ -363,6 +372,7 @@ type
   public
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       m_world := new PhysWorld(bl_vect(0, -9.8));
       var ground: RigidBody;
       // Ground
@@ -418,6 +428,7 @@ type
     
     procedure pre_frame(input: IInputSource); override;
     begin
+      inherited pre_frame(input);
       if input.is_key_down('Space') then
       begin
         l_flipj.ang_motor.run(20.0);
@@ -551,7 +562,7 @@ type
     
     function has_parametric() := ui_param_curve <> MiniShapesParamCurve.Param_None;
     
-    function reset_on_resize(): boolean; override := true;
+    procedure resize(w, h: real); override:=reset(w,h);
     
     function add_random_shape(pos: Vector): RigidBody;
     begin
@@ -570,6 +581,7 @@ type
     
     procedure reset(w, h: real); override;
     begin
+      inherited reset(w,h);
       m_world := new PhysWorld(bl_vect0);
       var side := sqrt(ui_objs_count) * sz * 2.5;
       m_view := Viewport.fixed_zoom(new Camera(bl_vect0, Min(w / side, h / side)), w, h);
@@ -581,8 +593,9 @@ type
     
     procedure pre_frame(input: IInputSource); override;
     begin
-      var ref_eql := object.ReferenceEquals;
+      inherited pre_frame(input);
       
+      var ref_eql := object.ReferenceEquals;
       if (ui_param_curve <> last_param_curve) then
       begin
         if has_parametric then
