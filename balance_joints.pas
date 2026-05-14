@@ -466,17 +466,13 @@ type
     
     static function world(a, b: RigidBody; world_anchor_a, world_anchor_b: Vector) := new DistanceJoint(a, b, DistanceAnchor.world(a.tr, b.tr, world_anchor_a, world_anchor_b));
     
-    function with_lin_limit(v: real): DistanceJoint;
-    begin
-      m_distance.run(v, v);
-      result := self;     
-    end;
-    
-    function with_lin_limit(min: real?; max: real?): DistanceJoint;
+    function with_lin_limit(min, max: real?): DistanceJoint;
     begin
       m_distance.run(min, max);
       result := self;
     end;
+    
+    function with_lin_limit(v: real) := with_lin_limit(v, v);
     
     function with_soft(freq, damping: real): DistanceJoint;
     begin
@@ -523,12 +519,13 @@ type
       result := self;
     end;
     
-    //TODO Refactor into two overloads (see DistanceJoint for more details)
-    function with_ang_limit(min: real  ?:= nil; max: real ?:= nil): RevoluteJoint;
+    function with_ang_limit(min, max: real?): RevoluteJoint;
     begin
-      m_ang_const.run(min, max <> nil ? max : min);
-      Result := self;
+      m_ang_const.run(min, max);
+      result := self;
     end;
+    
+    function with_ang_limit(v: real) := with_ang_limit(v, v);
     
     function with_ang_spring(freq, damping: real; ang: real; lim: Interval ?:= nil): RevoluteJoint;
     begin
@@ -542,7 +539,7 @@ type
       end
       else
         m_hard_const.run(en := false);
-      Result := self;
+      result := self;
     end;
     
     property anchor: PointAnchor read m_pnt_const.anchor write m_pnt_const.anchor := value;
@@ -583,21 +580,22 @@ type
     function with_lin_motor(speed, max_force: real): LineJoint;
     begin
       m_lin_motor.run(speed, max_force);
-      Result := self;
+      result := self;
     end;
     
     function with_ang_motor(speed, max_torque: real): LineJoint;
     begin
       m_ang_motor.run(speed, max_torque);
-      Result := self;
+      result := self;
     end;
     
-    //TODO Refactor into two overloads (see DistanceJoint for more details)
-    function with_lin_limit(min: real; max: real ? := nil): LineJoint;
+    function with_lin_limit(min, max: real?): LineJoint;
     begin
-      m_lin_const.run(min, max <> nil ? max : min);
-      Result := self;
+      m_lin_const.run(min, max);
+      result := self;
     end;
+    
+    function with_lin_limit(v: real) := with_lin_limit(v, v);
     
     function with_lin_spring(freq, damping: real; val: real; lim: Interval ?:= nil): LineJoint;
     begin
@@ -607,20 +605,20 @@ type
       begin
         assert(lim.Value.has(val));
         m_hard_const.compliance.set_hard();
-        //m_hard_const.compliance := ComplianceSpec.hard();
         m_hard_const.run(lim.Value.min, lim.Value.max, en := true)
       end
       else
         m_hard_const.run(en := false);
-      Result := self;
+      result := self;
     end;
     
-    //TODO Refactor into two overloads (see DistanceJoint for more details)
-    function with_ang_limit(min: real ? := nil; max: real ? := nil): LineJoint;
+    function with_ang_limit(min, max: real?): LineJoint;
     begin
-      m_ang_const.run(min, max <> nil ? max : min);
-      Result := self;
+      m_ang_const.run(min, max);
+      result := self;
     end;
+    
+    function with_ang_limit(v: real) := with_ang_limit(v, v);
     
     property anchor: LineAnchor read m_lin_const.anchor write 
       begin
@@ -663,7 +661,7 @@ type
     
     /// Сварка: тела намертво склеены в точке (точка + угол)
     static function Weld(a, b: RigidBody; world_anchor: Vector; ang: real ?:= nil) := 
-    RevoluteJoint.world(a, b, world_anchor).with_ang_limit(ang);
+    RevoluteJoint.world(a, b, world_anchor).with_ang_limit(ang, ang);
     
     /// Угловая пружина: удерживает тела под определенным углом (торсион)
     static function AngSpring(a, b: RigidBody; world_anchor: Vector; freq, damping: real; ang: real ?:= nil) := 
@@ -686,11 +684,11 @@ type
     
     /// Слайдер: неограниченное движение по оси без вращения
     static function Slider(a, b: RigidBody; world_anchor, world_axis: Vector; ang: real ?:= nil) := 
-    LineJoint.world(a, b, world_anchor, world_axis).with_ang_limit(ang);
+    LineJoint.world(a, b, world_anchor, world_axis).with_ang_limit(ang, ang);
     
     /// Поршень: осевое движение с лимитами и мотором
     static function Piston(a, b: RigidBody; world_anchor, world_axis: Vector; min, max: real; ang: real ?:= nil) := 
-    LineJoint.world(a, b, world_anchor, world_axis).with_lin_limit(min, max).with_ang_limit(ang);
+    LineJoint.world(a, b, world_anchor, world_axis).with_lin_limit(min, max).with_ang_limit(ang, ang);
     
     /// Амортизатор: мягкое осевое соединение с пружиной и жесткими стопорами по краям
     static function Absorber(a, b: RigidBody; world_anchor, world_axis: Vector; freq, damping, min, max: real; target: real ?:= nil) := 
@@ -698,7 +696,7 @@ type
     
     /// SliderSpring: осевая пружина без лимитов (бесконечная мягкая рельса)
     static function SliderSpring(a, b: RigidBody; world_anchor, world_axis: Vector; freq, damping: real; target: real := 0.0) := 
-    LineJoint.world(a, b, world_anchor, world_axis).with_lin_spring(freq, damping, target).with_ang_limit();
+    LineJoint.world(a, b, world_anchor, world_axis).with_lin_spring(freq, damping, target).with_ang_limit(nil, nil);
     //]
   end;
 
