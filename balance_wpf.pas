@@ -3,93 +3,84 @@ unit balance_wpf;
 
 uses GraphWPFBase, GraphWPF, balance;
 
+//TODO Frustum Culling
+
 type
-  wpf_vect = System.Windows.Vector;
-  wpf_point = System.Windows.Point;
+  wpfVector = System.Windows.Vector;
+  wpfPoint = System.Windows.Point;
   blVector = balance.Vector;
   blInterval = balance.Interval;
+  blShape = balance.Shape;
   blCircle = balance.Circle;
   blPolygon = balance.Polygon;
-  blShape = balance.Shape;
+  blShapeGroup = balance.ShapeGroup;
+  blViewport = balance.Viewport;
+  blBoundBox = balance.BoundBox;
+  blTransform = balance.Transform;
+  blPhysWorld = balance.PhysWorld;
 
-function vpnt(v: Vector) := new wpf_point(v.X, v.Y);
+function wpnt(v: blVector) := new wpfPoint(v.X, v.Y);
 
 function _pen_clr(c: Color?) := c <> nil ? c.value : Pen.Color;
 
+procedure line(v1, v2: blVector; view: blViewport; c: Color ?:= nil) :=
+line(wpnt(view.to_screen(v1)), wpnt(view.to_screen(v2)), _pen_clr(c));
 
+procedure line(x0, y0, x1, y1: real; view: blViewport; c: Color ?:= nil) :=
+line(bl_vect(x0, y0), bl_vect(x1, y1), view, c);
 
-procedure line(v1, v2: Vector; view: Viewport; c: Color ?:= nil);
-begin
-  v1 := view.to_screen(v1);
-  v2 := view.to_screen(v2);
-  line(vpnt(v1), vpnt(v2), _pen_clr(c));
-end;
+procedure circle(v: blVector; r: real; view: blViewport; c: Color ?:= nil) :=
+circle(wpnt(view.to_screen(v)), view.to_screen(r), _pen_clr(c));
 
-procedure line(x0, y0, x1, y1: real; view: Viewport; c: Color ?:= nil);
-begin
-  var v1 := view.to_screen(new Vector(x0, y0));
-  var v2 := view.to_screen(new Vector(x1, y1));
-  line(vpnt(v1), vpnt(v2), _pen_clr(c));
-end;
+procedure circle(x, y, r: real; view: blViewport; c: Color ?:= nil) := 
+circle(bl_vect(x, y), r, view, c);
 
-procedure circle(v: Vector; r: real; view: Viewport; c: Color ?:= nil);
-begin
-  v := view.to_screen(v);
-  circle(v.x, v.y, r, _pen_clr(c));//TODO r*view.radius
-end;
-
-procedure rectangle(r: BoundBox; view: Viewport; c: Color ?:= nil);
+procedure rectangle(r: blBoundBox; view: blViewport; c: Color ?:= nil);
 begin
   var pos := view.to_screen(r.min);
   var wh := view.to_screen(r.max) - pos;
   DrawRectangle(pos.x, pos.y, wh.x, wh.y, _pen_clr(c));
 end;
 
-procedure draw_vector(v0, v: Vector; view: Viewport; c: color ?:= nil);
+procedure rectangle(x, y, w, h: real; view: blViewport; c: Color ?:= nil) :=
+rectangle(blBoundBox.from_xywh(x, y, w, h), view, c);
+
+
+
+procedure draw_vector(v0, v: blVector; view: blViewport; c: color ?:= nil);
 begin
   var v1 := v0 + v;
   line(v0, v1, view, c);
-  circle(v1, 3, view, c);
+  circle(v1, view.to_world(3), view, c);
 end;
 
-{procedure draw_polygon(points:array of Vector; view: viewera; c: color ?:= nil);
+procedure Draw(self: blPolygon; tr: blTransform; view: blViewport; c: color ?:= nil); extensionmethod;
 begin
-  c:=_pen_clr(c);
-  DrawPolygon(points.Select(v -> vpnt(view.to_screen(tr.apply(v)))).ToArray(), c.Value);
-end;}
-
-
-
-procedure Draw(self: balance.Polygon; tr: Transform; view: Viewport; c: color ?:= nil); extensionmethod;
-begin
-  var points := self.vertices.Select(v -> vpnt(view.to_screen(tr.apply(v)))).ToArray();
+  var points := self.vertices.Select(v -> wpnt(view.to_screen(tr.apply(v)))).ToArray();
   DrawPolygon(points, _pen_clr(c));
 end;
 
-procedure Draw(self: balance.Circle; tr: Transform; view: Viewport; c: color ?:= nil); extensionmethod;
+procedure Draw(self: blCircle; tr: blTransform; view: blViewport; c: color ?:= nil); extensionmethod;
 begin
-  var p := vpnt(view.to_screen(tr.pos));
+  var p := view.to_screen(tr.pos);
   var r := view.to_screen(self.radius);
-  var col := _pen_clr(c);
-  //circle(tr.pos, self.radius * view.zoom, view, c);
-  DrawCircle(p, r, _pen_clr(c));
-  
-  var p1 := vpnt(view.to_screen(tr.apply(bl_vect(self.radius, 0))));
-  
-  Line(p.X, p.Y, p1.x, p1.y, col);
+  var clr := _pen_clr(c);
+  var p1 := view.to_screen(tr.apply(bl_vect(self.radius, 0)));
+  DrawCircle(p.x, p.y, r, clr);
+  Line(p.x, p.y, p1.x, p1.y, clr);
 end;
 
-procedure Draw(self: balance.Shape; tr: Transform; view: Viewport; c: color ?:= nil); extensionmethod;
+procedure Draw(self: blShape; tr: blTransform; view: blViewport; c: color ?:= nil); extensionmethod;
 begin
   case self.kind of
-    ShapeKind.ShapePolygon: (balance.Polygon(self)).Draw(tr, view, c);
-    ShapeKind.ShapeCircle: (balance.Circle(self)).Draw(tr, view, c)
+    ShapeKind.ShapePolygon: balance.Polygon(self).Draw(tr, view, c);
+    ShapeKind.ShapeCircle: balance.Circle(self).Draw(tr, view, c)
   else assert(false, 'Unknown shape');
   end;
 end;
 
-procedure Draw(self: ShapeGroup; tr: Transform; view: Viewport; c: color ?:= nil); extensionmethod;
-begin
+procedure Draw(self: blShapeGroup; tr: blTransform; view: blViewport; c: color ?:= nil); extensionmethod;
+begin  
   foreach var p in self.parts do
     p.shap.Draw(tr.combine(p.tr), view, c);
 end;
@@ -102,29 +93,29 @@ begin
 end;
 
 
-procedure draw_world(world: PhysWorld; view: Viewport);
+procedure draw_world(world: blPhysWorld; view: blViewport);
 begin
-  if (world.bounds <> nil) then 
+  if world.bounds <> nil then 
     world.bounds.Draw(world.bounds_body.tr, view);
-  foreach var body in world.bodies do
-    body.group.Draw(body.tr, view);
+  foreach var b in world.bodies do
+    b.group.Draw(b.tr, view);
 end;
 
-procedure dbg_draw_world(world: PhysWorld; view: Viewport; bbox: boolean := true; vel: boolean := true; cons: boolean := true);
+procedure dbg_draw_world(world: blPhysWorld; view: blViewport; bbox: boolean := true; vel: boolean := true; cons: boolean := true);
 begin
   var base_color := GraphWPF.Pen.Color; 
   var static_color := Color.Multiply(base_color, 0.7);
   
-  if (world.bounds <> nil) then 
+  if world.bounds <> nil then 
     world.bounds.Draw(world.bounds_body.tr, view);
   
-  foreach var body in world.bodies do
+  foreach var b in world.bodies do
   begin
-    body.group.Draw(body.tr, view, body.is_static ? static_color : base_color);
+    b.group.Draw(b.tr, view, b.is_static ? static_color : base_color);
     if bbox then
-      rectangle(body.aabb, view, Color.FromArgb(120, 255, 0, 0));
-    if vel and not body.is_static then
-      draw_vector(body.pos, body.vel, view, Colors.Yellow);    
+      rectangle(b.aabb, view, Color.FromArgb(120, 255, 0, 0));
+    if vel and not b.is_static then
+      draw_vector(b.pos, b.vel, view, Colors.Yellow);    
   end;  
   
   if cons then
@@ -138,23 +129,15 @@ begin
 end;
 
 
-
-{procedure dDraw(self: Polygon; tr: Transform; view:viewera; bbox:boolean:=true); extensionmethod;
-begin
-  self.Draw(tr, view);
-  rectangle(self.aabb, view, Colors.Red);
-end;}
-
-
 type
   GraphCanvas = class
   private
     m_canvas: System.Windows.Controls.Canvas;
-    m_w:real:=real.NaN;
-    m_h: real:=real.NaN;
+    m_w: real := real.NaN;
+    m_h: real := real.NaN;
     procedure resizedd();
     begin
-      if m_canvas=nil then
+      if m_canvas = nil then
       begin
         m_canvas := MainDockPanel.Children.OfType&<System.Windows.Controls.Canvas>().FirstOrDefault();
         assert(m_canvas <> nil);
@@ -165,17 +148,14 @@ type
     end;
   
   public
-    procedure resized():=Invoke(resizedd);
-    property WPFCanvas:System.Windows.Controls.Canvas read m_canvas;
-    property Width:real read m_w<>m_w?GraphWindow.Width:m_w;
-    property Height:real read m_h<>m_h?GraphWindow.Height:m_h;
+    procedure resized() := Invoke(resizedd);
+    property WPFCanvas: System.Windows.Controls.Canvas read m_canvas;
+    property Width: real read m_w <> m_w ? GraphWindow.Width : m_w;
+    property Height: real read m_h <> m_h ? GraphWindow.Height : m_h;
   end;
 
-//При использовании модуля Controls, размеры доступные для рисования, находятся таким образом
-{function CanvasWidth() :=  InvokeReal(() -> get_canvas().ActualWidth);
-function CanvasHeight() := InvokeReal(() -> get_canvas().ActualHeight);}
-
-var Canvas:=new GraphCanvas();
+var
+  Canvas := new GraphCanvas();
 
 begin
 end. 
