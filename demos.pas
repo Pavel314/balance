@@ -296,6 +296,7 @@ type
       
       var road: RigidBody := nil;
       begin
+        var road_mat := Material.from_frd(0.5, 0.2, 0.6);
         var hs := |0.25, 1.0, 4.0, 0.0, 0.0, -1.0, -2.0, -2.0, -1.25, 0.0|;
         var x := 20.0;
         var dx := 5.0;
@@ -308,7 +309,7 @@ type
           end;
         pts.Add(bl_vect(x + 40.0,   0));
         pts.Add(bl_vect(x + 40.0, -20));
-        var segment: Func<array of Vector, RigidBody> := pts -> world.add_body(ShapeGroup.make_lines_chain(pts, 0.1, false), is_static := true);
+        var segment: Func<array of Vector, RigidBody> := pts -> world.add_body(ShapeGroup.make_lines_chain(pts, 0.1, false), is_static := true, mat:=road_mat);
         road := segment(pts.ToArray());
         x += 80;
         segment(|bl_vect(x, 0), bl_vect(x + 40, 0), bl_vect(x + 50, 5)|);

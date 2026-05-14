@@ -374,6 +374,8 @@ var
   input: InputSystemWPF;
   sc: BaseScene;
   sc_panel: DemoPanelWPF;
+  total_fps := new FpsCounter();
+  phys_fps := new FpsCounter();
 
 procedure reset_scene() := sc.reset(Canvas.Width, Canvas.Height);
 
@@ -405,18 +407,23 @@ end;
 
 procedure on_frame(dt: real);
 begin
+  var t_fps := total_fps.stop();
+  total_fps.start();
+  
   sc.pre_frame(input);
   input.on_frame(dt, sc.world);
   ui.world_sync(sc.world, true);
   
-  start_fps();
+  phys_fps.start();
   var steps := sc.world.simulate(dt);
-  var fps := stop_fps();
+  phys_fps.stop();
   
   sc.post_frame(input, steps);
   Window.Clear(colors.Black);
   dbg_draw_world(sc.world, sc.view, bbox := ui.dbg_aabb.Checked, vel := ui.dbg_vels.Checked, cons := ui.dbg_cons.Checked);
-  DrawText(50, 0, 100, 10, $'Phys FPS: {fps:f0}, OBJS={sc.world.bodies.Count} ', Colors.Red);
+  
+  var info := $'FPS: {t_fps,4:f0}, Phys FPS: {phys_fps.fps,4:f0}, OBJS: {sc.world.bodies.Count,4}';
+  TextOut(5, 3, info, Colors.Red);
 end;
 
 
