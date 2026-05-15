@@ -233,9 +233,9 @@ type
     begin
       if not enabled then exit;
       if active_side = IntervalSide.Inside then exit;
-      
-      var soft_bias := compliance.is_soft ? bias : 0;
       begin
+        var soft_bias := compliance.is_soft ? bias : 0;
+        
         var rv := PairUtils.get_rel_vel_ang(a, b);
         var imp := -k_mass * (rv + soft_bias + compliance.actual_softness * acc_imp);
         var delta := PairUtils.solve_impulse(acc_imp, imp, active_side);
@@ -297,9 +297,10 @@ type
     procedure solve(a, b: RigidBody); override;
     begin
       if not enabled then exit;
-      var soft_bias := compliance.is_soft ? bias : bl_vect0;
       begin
-        var rv := PairUtils.get_rel_vel_r(a, b, r_a, r_b);   
+        var soft_bias := compliance.is_soft ? bias : bl_vect0;
+        
+        var rv := PairUtils.get_rel_vel_r(a, b, r_a, r_b);
         var imp := k_matrix * -(rv + soft_bias + acc_imp * compliance.actual_softness); 
         acc_imp += imp;
         PairUtils.add_impulse_r(a, b, r_a, r_b, imp);

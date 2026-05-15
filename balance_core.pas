@@ -994,8 +994,9 @@ type
     
     static procedure solve_1d(a, b: RigidBody; r_a, r_b, n: Vector; var acc_imp: real; k_mass, softness, bias: real; side: IntervalSide; is_soft: boolean);
     begin
-      var soft_bias := is_soft ? bias : 0;
       begin
+        var soft_bias := is_soft ? bias : 0;
+        
         var rv := get_rel_vel_r(a, b, r_a, r_b) * n;
         var imp := -k_mass * (rv + soft_bias + softness * acc_imp);
         var delta := solve_impulse(acc_imp, imp, side);
