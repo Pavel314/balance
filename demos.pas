@@ -1,4 +1,9 @@
-﻿unit demos;
+﻿// ****************************************************************
+// Some scenes are adapted from Box2D samples (box2d.org)
+// Box2D created by Erin Catto, MIT License
+// ****************************************************************
+
+unit demos;
 
 uses balance, demos_helper;
 
