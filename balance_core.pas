@@ -1395,7 +1395,7 @@ type
     
     property ground: RigidBody read m_ground;
     
-    constructor create(grav: Vector := bl_vect(0, -3); freq: real := 60; max_steps: integer := 10);//TODO replace by (0,-9.8)
+    constructor create(grav: Vector := bl_vect(0, -10); freq: real := 60; max_steps: integer := 10);
     begin
       bodies := new List<RigidBody>();
       solver := new CollisionResolver();

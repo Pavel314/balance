@@ -14,7 +14,7 @@ type
     procedure reset(w, h: real); override;
     begin
       inherited reset(w,h);
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 14), 35 * 0.6), w, h);
       begin
         var mat := Material.from_frd(0.2, 0, 1);
@@ -43,7 +43,7 @@ type
     procedure reset(w, h: real); override;
     begin
       inherited reset(w,h);
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       m_view := Viewport.fixed_zoom(new Camera(bl_trans(0, 4), 200 * 0.25), w, h);
       
       var mat := Material.from_frd(0.5, 0, 1.0);
@@ -88,7 +88,7 @@ type
     begin
       inherited reset(w,h);
       var grid := new SimpleGridLayout(ui_cols, ui_rows, bl_vect(sz, sz), bl_vect(ui_gap, 0));
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       var bbox := grid.bbox.expand(sz * 4, sz, sz * 4, 0);
       m_view := Viewport.fixed_world(new Camera(bbox.center), bbox.width, bbox.height, w, h);
       
@@ -171,7 +171,7 @@ type
       var grid := new SimpleGridLayout(springs_count, 1, bl_vect(sz, scene_h), bl_vect(gap, 0));
       var bbox := grid.bbox;
       
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       m_view := Viewport.fixed_world(new Camera(bbox.center, 1), bbox.width, bbox.height, w, h);
       
       var box := bl_group(Polygon.box(sz, sz));
@@ -237,7 +237,7 @@ type
       var scene_h := ui_thread_length + border_h;
       var grid := new SimpleGridLayout(ui_ball_count, 1, bl_vect(sz, scene_h), bl_vect(sz / 20, 0), bl_vect(0, 0.5));
       
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       
       var bbox := grid.bbox.expand(ui_thread_length);
       m_view := Viewport.fixed_world(new Camera(bbox.center), bbox.width, bbox.height, w, h);
@@ -296,7 +296,7 @@ type
     procedure reset(w, h: real); override;
     begin
       inherited reset(w,h);
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       m_view := Viewport.fixed_height(new Camera(bl_vect(0, 4)), 20, w, h);
       
       var road: RigidBody := nil;
@@ -379,7 +379,7 @@ type
     procedure reset(w, h: real); override;
     begin
       inherited reset(w,h);
-      m_world := new PhysWorld(bl_vect(0, -9.8));
+      m_world := new PhysWorld();
       var ground: RigidBody;
       // Ground
       begin
