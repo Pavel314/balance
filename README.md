@@ -70,6 +70,20 @@ Executing the script without arguments automatically builds both the `balance.pa
 balance_build_script -h
 ```
 
+## MiniFAQ
+
+### 1. Why was PascalABC.NET chosen?
+Using PascalABC.NET is my way of showing gratitude to the language and its ecosystem, where my journey began many years ago. In those early days, I wrote my very first lines of code in the original Delphi-based PascalABC interpreter. Before long, I moved on to PascalABC.NET.
+That invaluable experience gradually built a solid foundation in statically-typed languages, which later allowed me to learn a wide range of languages and technologies, including C#, C++, C, and Python. Building **Balance** on PascalABC.NET is a tribute to the tool that started it all.
+
+### 2. How stable is the API?
+The general architecture and core interfaces are well-defined, but the API is not yet frozen. Breaking changes are expected as the engine evolves. For any project, it is highly recommended to pin it to a specific commit.
+
+### 3. Why is the standard `Controls.pas` module included in the repository?
+It is entirely possible that the PascalABC.NET community will introduce breaking API changes to the `Controls.pas` module over time. Keeping a local copy in this repository shields the demo codebase from those changes.
+
+### 4. Can I open an Issue, submit a PR, or ask a question?
+Sure. Feel free to ask questions, open issues, or propose improvements. Community contributions, feedback, and external code reviews are highly valued and always welcome.
 
 ## License
 
