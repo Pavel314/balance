@@ -9,6 +9,14 @@ It is fully implemented in **PascalABC.NET**, has **zero external dependencies**
   <img src="logo/logo.svg" width="500" alt="Balance Logo"> 
 </p>
 
+## Video Showcase
+
+<!-- <details> -->
+  <!-- <summary>🎬 <b>Click to watch interactive demo video</b></summary> -->
+  <p align="center">
+    <video src="https://github.com/user-attachments/assets/4397567b-f307-4c5a-9727-62c476deceb2"controls muted playsinline></video>
+  </p>
+<!-- </details> -->
 
 ## Features
 
